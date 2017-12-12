@@ -1,0 +1,105 @@
+#!/usr/bin/python
+from animate import Animate, runshow
+import time
+import signal
+import sys
+
+inifile = '/opt/lightshow/etc/lightshow.ini'
+
+anim = Animate(inifile)
+animthread = None
+
+def signal_handler(signal, frame):
+  print('Ending threads gracefully')
+  if animthread:
+    animthread.running = False
+    animthread.join()
+  runshow(anim,"Solid")
+  print "Exiting"
+  sys.exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
+
+print "Off"
+animthread = runshow(anim,"Solid")
+time.sleep(2)
+
+print "Solid red"
+animthread = runshow(anim,"Solid",("red",))
+time.sleep(0.5)
+
+print "Solid green"
+animthread = runshow(anim,"Solid",("green",))
+time.sleep(0.5)
+
+print "Solid blue"
+animthread = runshow(anim,"Solid",("blue",))
+time.sleep(0.5)
+
+print "Solid white"
+animthread = runshow(anim,"Solid",("white",))
+time.sleep(0.5)
+
+print "EveryX"
+animthread = runshow(anim,"EveryX",(3,1000))
+time.sleep(5)
+if (animthread):
+  animthread.running = False
+  animthread.join()
+
+print "Color Wipe Default"
+animthread = runshow(anim,"ColorWipe")
+time.sleep(10)
+if (animthread):
+  animthread.running = False
+  animthread.join()
+
+print "Color Wipe Faster"
+animthread = runshow(anim,"ColorWipe",(15,3))
+time.sleep(10)
+if (animthread):
+  animthread.running = False
+  animthread.join()
+
+print "Color Wipe Really Fast"
+animthread = runshow(anim,"ColorWipe",(15,6))
+time.sleep(10)
+if (animthread):
+  animthread.running = False
+  animthread.join()
+
+print "Color Wipe Faster reverse"
+animthread = runshow(anim,"ColorWipe",(15,-3))
+time.sleep(10)
+if (animthread):
+  animthread.running = False
+  animthread.join()
+
+print "Color Wipe Defined"
+animthread = runshow(anim,"ColorWipe",(15,1,["blue","white"]))
+time.sleep(10)
+if (animthread):
+  animthread.running = False
+  animthread.join()
+
+print "Off"
+animthread = runshow(anim,"Solid")
+
+print "Comet"
+animthread = runshow(anim,"Comet",(20,30,3))
+time.sleep(10)
+if (animthread):
+  animthread.running = False
+  animthread.join()
+
+print "EveryX"
+animthread = runshow(anim,"EveryX",(1,1000,["red","white","blue","green"]))
+time.sleep(10)
+if (animthread):
+  animthread.running = False
+  animthread.join()
+
+print "Off"
+animthread = runshow(anim,"Solid")
+time.sleep(1)
+print "Done"

@@ -1,0 +1,45 @@
+#!/usr/bin/python
+from animate import Animate, runshow
+import time
+import signal
+import sys
+
+inifile = '/opt/lightshow/etc/lightshow.ini'
+
+anim = Animate(inifile)
+animthread = None
+
+def signal_handler(signal, frame):
+  print('Ending threads gracefully')
+  if animthread:
+    animthread.running = False
+    animthread.join()
+  runshow(anim,"Solid")
+  print "Exiting"
+  sys.exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
+
+print "Off"
+animthread = runshow(anim,"Solid")
+time.sleep(0.25)
+
+print "EveryX"
+animthread = runshow(anim,"EveryX",(3,100,["red","white","blue","green"]))
+time.sleep(10)
+if (animthread):
+  animthread.running = False
+  animthread.join()
+
+#print "Comet"
+#animthread = runshow(anim,"Comet",(15,30,10))
+#time.sleep(60)
+#if (animthread):
+#  animthread.running = False
+#  animthread.join()
+
+time.sleep(0.25)
+print "Off"
+animthread = runshow(anim,"Solid")
+time.sleep(1)
+print "Done"

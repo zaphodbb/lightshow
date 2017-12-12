@@ -1,0 +1,135 @@
+#!/usr/bin/python
+################################################################################
+# Main driver for exterior lights.  Uses 0MQ for communication from web server
+# in the /opt/lightshow/lighthouse django web app.
+#
+# This runs a thread that is the current show while the master listens for zero
+# MQ requests to provide data and change the shows.
+################################################################################
+from animate import Animate, runshow
+import time
+import signal
+import simplejson as json
+import sys
+import threading
+import argparse
+import zmq
+import sqlite3
+import logging
+import os
+
+basedir = '/opt/lightshow'
+inifile = basedir + '/etc/lightshow.ini'
+pidfile = basedir + '/run/lightshow.pid'
+logfile = basedir + '/log/lightshow.log'
+dbfile  = basedir + '/data/lightshow.db"
+loglevel = logging.INFO
+
+#Initialize anim object
+anim = Animate(inifile)
+animthread = None
+
+def signal_handler(signal, frame):
+  logging.info("Shutting Down")
+  if animthread:
+    animthread.running = False
+    animthread.join()
+  runshow(anim,"Solid")
+  print "Exiting"
+  try:
+    os.remove(pidfile)
+  except OSError:
+    pass
+  sock.close()
+  sys.exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
+
+##### Set up logging
+logging.basicConfig(filename=logfile,level=loglevel)
+
+##### Create pid file
+pid = os.getpid()
+pf = open(pidfile,'w')
+pf.write(str(pid))
+pf.close
+
+##### Set up zeromq queue
+context = zmq.Context()
+sock = context.socket(zmq.REP)
+sock.bind("tcp://127.0.0.1:5678")
+
+logging.info("Lightshow started.")
+#parser = argparse.ArgumentParser(description='zeromq server/client')
+#parser.add_argument('--bar')
+#args = parser.parse_args()
+
+shows = [ ]
+currentshow = {}
+
+def getColorNames(socket):
+  colorarray = anim.getcolors()
+  try:
+    socket.send(json.dumps(result))
+  except:
+    logging.error("Error sending color array to socket")
+
+def setShow(socket,showname):
+  global currentshow
+  global shows
+  global dbfile
+  logging.info("Setting show to " + showname)
+  found = 0
+  for i in range(len(shows)):
+    if shows[i]["name"] == showname:
+      currentshow = shows[i]
+      logging.debug("Updating Database with '" + showname + "'")
+      db = sqlite3.connect(dbfile)
+      cursor = db.cursor()
+      cursor.execute('''delete from currentshow''')
+      cursor.execute('''insert into currentshow values(?)''',(showname,))
+      db.commit()
+      db.close()
+      result = {"result": "success", "msg": "OK"}
+      if socket:
+        socket.send(json.dumps(result))
+      else:
+        logging.debug(json.dumps(result))
+      found = 1
+      clearstrip()
+  if found != 1:
+    result = {"result": "error", "msg": "Show Not Available"}
+    if socket:
+      socket.send(json.dumps(result))
+    else:
+      logging.debug(json.dumps(result))
+
+def handleRequest():
+  try:
+    message = sock.recv(flags=zmq.NOBLOCK)
+    logging.debug("Message received:", message)
+    req = json.loads(message)
+    if req["action"] == "getshows":
+      listShows(sock)
+    elif req["action"] == "setshow":
+      setShow(sock,req["showname"])
+    elif req["action"] == "getcurrentshow":
+      getCurrentShow(sock)
+    elif req["action"] == "getcolornames":
+      getColorNames(sock)
+    else:
+      sock.send('{"response":"Unknown Action"}')
+  except zmq.Again as e:
+    pass
+
+def main():
+  global currentshow
+  loadshows()
+  while True:
+    globals()[currentshow["function"]]()
+    handleRequest()
+
+if __name__ == '__main__':
+  #opt_parse()
+  main()
+

@@ -1,0 +1,8 @@
+#!/usr/bin/python
+from animate import Animate, runshow
+
+inifile = '/opt/lightshow/etc/lightshow.ini'
+
+anim = Animate(inifile)
+
+runshow(anim,"Solid")
