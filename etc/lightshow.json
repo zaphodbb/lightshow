@@ -1,29 +1,31 @@
 {
+  "Colors": {
+    "blue": 255,
+    "off": 0,
+    "purple": 16711935,
+    "yellow": 16739840,
+    "green": 65280,
+    "orange": 16717568,
+    "white": 16777215,
+    "red": 16711680
+  },
   "Strips": {
     "SK6812_SHIFT_WMASK": "0xf0000000",
     "SK6812W_STRIP": "0x18081000",
-    "WS2811_STRIP_GBR": "0x00080010",
+    "WS2811_STRIP_GRB": "0x00081000",
     "SK6812_STRIP_RBGW": "0x18100008",
     "SK6812_STRIP_BRGW": "0x18001008",
+    "WS2811_STRIP_RBG": "0x00100008",
     "SK6812_STRIP_RGBW": "0x18100800",
     "SK6812_STRIP_GRBW": "0x18081000",
-    "WS2811_STRIP_GRB": "0x00081000",
-    "WS2811_STRIP_BGR": "0x00000810",
-    "SK6812_STRIP_BGRW": "0x18000810",
-    "WS2811_STRIP_BRG": "0x00001008",
-    "SK6812_STRIP": "0x00081000",
-    "WS2811_STRIP_RBG": "0x00100008",
-    "WS2812_STRIP": "0x00081000",
+    "WS2811_STRIP_GBR": "0x00080010",
     "SK6812_STRIP_GBRW": "0x18080010",
-    "WS2811_STRIP_RGB": "0x00100800"
-  },
-  "Colors": {
-    "blue": 255,
-    "gray": 6579300,
-    "off": 0,
-    "green": 65280,
-    "white": 16777215,
-    "red": 16711680
+    "SK6812_STRIP_BGRW": "0x18000810",
+    "WS2811_STRIP_RGB": "0x00100800",
+    "SK6812_STRIP": "0x00081000",
+    "WS2811_STRIP_BRG": "0x00001008",
+    "WS2812_STRIP": "0x00081000",
+    "WS2811_STRIP_BGR": "0x00000810"
   },
   "Shows": [
     {
@@ -133,5 +135,15 @@
     "strip": "0x00081000",
     "gpio": 10,
     "freq": 800000
+  },
+  "CurrentShow": {
+    "args": [
+      {
+        "type": "string",
+        "name": "Color",
+        "value": "off"
+      }
+    ],
+    "name": "Solid"
   }
 }

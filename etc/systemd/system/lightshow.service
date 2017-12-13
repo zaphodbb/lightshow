@@ -1,0 +1,14 @@
+[Unit]
+Description=Python process driving the holiday lights
+
+[Service]
+ExecStart=/opt/lightshow/bin/lightshow
+PIDFile=/opt/lightshow/run/lightshow.pid
+User=root
+Group=root
+Restart=on-failure
+KillSignal=SIGINT
+Type=simple
+
+[Install]
+WantedBy=multi-user.target

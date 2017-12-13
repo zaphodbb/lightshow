@@ -1,0 +1,79 @@
+#!/usr/bin/python
+import simplejson as json
+import lsclient
+from argparse import ArgumentParser
+
+parser = ArgumentParser(description='Lightshow client')
+parser.add_argument('--off', action='store_true', help='Shut lights all off')
+parser.add_argument('--status', action='store_true', help='Identify current show')
+parser.add_argument('--shows', action='store_true', help='Identify available shows')
+parser.add_argument('--setshow', nargs='?', help='change shows (Will prompt for args)')
+args = parser.parse_args()
+
+def checkResult(result):
+  if result['result'] != "success":
+    print("ERROR: " + json.dumps(result))
+
+if args.status:
+  result = lsclient.status()
+  result = json.loads(result)
+  checkResult(result)
+elif args.off:
+  result = lsclient.setshow("Solid",('off',))
+  result = json.loads(result)
+  checkResult(result)
+elif args.shows:
+  result = lsclient.getshows()
+  result = json.loads(result)
+  print "Available Shows:"
+  for show in result:
+    print " " + show['name']
+elif args.setshow:
+  result = lsclient.getshow(args.setshow)
+  result = json.loads(result)
+  #print(json.dumps(result))
+  print "Enter parameters for " + args.setshow + ":"
+  showargs = []
+  #raw_input("Saving color, enter color name: ")
+  for arg in result['args']:
+    name = arg['name']
+    type = arg['type']
+    default = arg['default']
+    if type == "colorarray" or type == "array":
+      defstr = ""
+      for i in default:
+        defstr = defstr + i + ","
+      default=defstr.rstrip(",")
+    argval = raw_input(name + " (" + str(default) + "): ")
+    if argval == "":
+      argval = default
+    if type == "string":
+      showargs.append(argval)
+    if type == "color":
+      try:
+        showargs.append(int(argval))
+      except ValueError:
+        showargs.append(argval)
+    elif type == "int":
+      showargs.append(int(argval))
+    elif type == "colorarray":
+      parts = argval.split(',')
+      argarr = []
+      for p in parts:
+        try:
+          argarr.append(int(p))
+        except ValueError:
+          argarr.append(p)
+      showargs.append(argarr)
+  result = lsclient.setshow(args.setshow,tuple(showargs))
+  result = json.loads(result)
+  checkResult(result)
+else:
+  print "No action taken"
+  
+
+#print "Setting show to Every Other Red Green"
+#result = lsclient.setshow("EveryX",(2,1000,['red','green']))
+#result = json.loads(result)
+#print "Result: " + json.dumps(result, indent=2) + "\n"
+

@@ -28,7 +28,6 @@ anim = Animate(inifile)
 animthread = None
 
 def signal_handler(signal, frame):
-  global pidfile
   logging.info("Shutting Down")
   if animthread:
     animthread.running = False
@@ -45,12 +44,13 @@ def signal_handler(signal, frame):
 signal.signal(signal.SIGINT, signal_handler)
 
 ##### Set up logging
-logging.basicConfig(filename=logfile,level=loglevel)
+logging.basicConfig(filename=logfile,level=loglevel,format='%(asctime)s %(levelname)-8s %(message)s')
 
 ##### Create pid file
 pid = os.getpid()
 with open(pidfile, 'w') as pidfile:
   pidfile.write(str(pid))
+  pidfile.close()
 
 ##### Set up zeromq queue
 context = zmq.Context()
@@ -64,7 +64,7 @@ sock.bind("tcp://127.0.0.1:5678")
 logging.info("Lightshow started.")
 
 def getColorNames(socket):
-  colorarray = anim.getcolors()
+  colorarray = anim.getcolornames()
   try:
     socket.send(json.dumps(colorarray))
   except:
@@ -87,13 +87,39 @@ def setShow(socket,showname,argtup):
   else:
     logging.debug(json.dumps(result))
 
+def getShows(socket):
+  showarray = anim.getshows()
+  try:
+    socket.send(json.dumps(showarray))
+  except:
+    logging.error("Error sending show array to socket")
+  
+def getShow(socket,sname):
+  show = anim.getshow(sname)
+  if show == None:
+    show = {"error":"Show not found"}
+  try:
+    socket.send(json.dumps(show))
+  except:
+    logging.error("Error sending show object to socket")
+  
+def getCurrentShow(socket):
+  show = anim.getcurrentshow()
+  try:
+    socket.send(json.dumps(show))
+  except:
+    logging.error("Error sending show to socket")
+
 def handleRequest():
   try:
     message = sock.recv(flags=zmq.NOBLOCK)
     logging.debug("Message received:", message)
     req = json.loads(message)
+    logging.info("Received: " + json.dumps(req))
     if req["action"] == "getshows":
-      listShows(sock)
+      getShows(sock)
+    if req["action"] == "getshow":
+      getShow(sock,req["showname"])
     elif req["action"] == "setshow":
       setShow(sock,req["showname"],req["showargs"])
     elif req["action"] == "getcurrentshow":

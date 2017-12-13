@@ -17,13 +17,14 @@ import sys
 from neopixel import *
 from random import random
 import simplejson as json
+import logging
+log = logging.getLogger(__name__)
 
 def runanimation(fn):
   def wrapper(*args, **kwargs):
     thread = threading.Thread(target=fn, args=args, kwargs=kwargs)
     thread.start()
     return thread
-
   return wrapper
 
 def runshow(anim, name, args=None):
@@ -49,6 +50,7 @@ class Animate:
 
     with open(inifile, 'r') as configfile:
       self.cfg = json.load(configfile)
+      configfile.close()
 
     self.colornames = {}
     self.colornames = self.cfg['Colors']
@@ -70,13 +72,18 @@ class Animate:
     self.cfg['Colors'] = self.colornames
     with open(self.inifile, 'wb') as configfile:
       configfile.write(json.dumps(self.cfg,indent=2))
+      configfile.close()
 
   def savecurrentshow(self,showinfo):
     self.cfg['CurrentShow'] = showinfo
     with open(self.inifile, 'wb') as configfile:
       configfile.write(json.dumps(self.cfg,indent=2))
+      configfile.close()
 
   def getcolors(self):
+    return self.cfg['Colors']
+    
+  def getcolornames(self):
     carr = []
     for k in self.colornames:
       carr.append(k)
@@ -87,6 +94,15 @@ class Animate:
     
   def getcurrentshow(self):
     return self.cfg['CurrentShow']
+
+  def getshows(self):
+    return self.cfg['Shows']
+
+  def getshow(self,name):
+    for show in self.cfg['Shows']:
+      if show['name'] == name:
+        return show
+    return None
     
   def asleep(self,sleepfor=1000):
     #Animation sleep ... sleep while still checking for signals
@@ -147,7 +163,7 @@ class Animate:
           self.strip.show()
 
   @runanimation
-  def Comet(self,clen=20,delay=100,step=1):
+  def Comet(self,clen=20,delay=100,step=1,color="white"):
     showinfo = {"name":"Comet","args":[{"name":"Length","type":"int","value":clen},
                                        {"name":"Delay","type":"int","value":delay},
                                        {"name":"Step","type":"int","value":step}]}

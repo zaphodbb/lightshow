@@ -1,0 +1,28 @@
+#!/usr/bin/python
+import simplejson as json
+import lsclient
+
+print "Getting status"
+result = lsclient.status()
+print "Result: " + json.dumps(result) + "\n"
+
+print "Getting shows"
+result = lsclient.getshows()
+print "Result: " + json.dumps(result) + "\n"
+
+print "Setting show to Every Other Red Green"
+result = lsclient.setshow("Every Other Red Green")
+print "Result: " + json.dumps(result) + "\n"
+
+print "Getting status"
+result = lsclient.status()
+print "Result: " + json.dumps(result) + "\n"
+
+#print "Setting show to Comets"
+#result = lsclient.setshow("Comets")
+#print "Result: " + json.dumps(result) + "\n"
+#
+#print "Getting status"
+#result = lsclient.status()
+#print "Result: " + json.dumps(result) + "\n"
+
