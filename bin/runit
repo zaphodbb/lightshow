@@ -4,7 +4,7 @@ import time
 import signal
 import sys
 
-inifile = '/opt/lightshow/etc/lightshow.ini'
+inifile = '/opt/lightshow/etc/lightshow.json'
 
 anim = Animate(inifile)
 animthread = None

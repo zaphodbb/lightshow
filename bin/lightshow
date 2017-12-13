@@ -14,15 +14,13 @@ import sys
 import threading
 import argparse
 import zmq
-import sqlite3
 import logging
 import os
 
 basedir = '/opt/lightshow'
-inifile = basedir + '/etc/lightshow.ini'
+inifile = basedir + '/etc/lightshow.json'
 pidfile = basedir + '/run/lightshow.pid'
 logfile = basedir + '/log/lightshow.log'
-dbfile  = basedir + '/data/lightshow.db"
 loglevel = logging.INFO
 
 #Initialize anim object
@@ -30,6 +28,7 @@ anim = Animate(inifile)
 animthread = None
 
 def signal_handler(signal, frame):
+  global pidfile
   logging.info("Shutting Down")
   if animthread:
     animthread.running = False
@@ -50,59 +49,43 @@ logging.basicConfig(filename=logfile,level=loglevel)
 
 ##### Create pid file
 pid = os.getpid()
-pf = open(pidfile,'w')
-pf.write(str(pid))
-pf.close
+with open(pidfile, 'w') as pidfile:
+  pidfile.write(str(pid))
 
 ##### Set up zeromq queue
 context = zmq.Context()
 sock = context.socket(zmq.REP)
 sock.bind("tcp://127.0.0.1:5678")
 
-logging.info("Lightshow started.")
 #parser = argparse.ArgumentParser(description='zeromq server/client')
 #parser.add_argument('--bar')
 #args = parser.parse_args()
 
-shows = [ ]
-currentshow = {}
+logging.info("Lightshow started.")
 
 def getColorNames(socket):
   colorarray = anim.getcolors()
   try:
-    socket.send(json.dumps(result))
+    socket.send(json.dumps(colorarray))
   except:
     logging.error("Error sending color array to socket")
 
-def setShow(socket,showname):
-  global currentshow
-  global shows
-  global dbfile
+def setShow(socket,showname,argtup):
+  global animthread
   logging.info("Setting show to " + showname)
-  found = 0
-  for i in range(len(shows)):
-    if shows[i]["name"] == showname:
-      currentshow = shows[i]
-      logging.debug("Updating Database with '" + showname + "'")
-      db = sqlite3.connect(dbfile)
-      cursor = db.cursor()
-      cursor.execute('''delete from currentshow''')
-      cursor.execute('''insert into currentshow values(?)''',(showname,))
-      db.commit()
-      db.close()
-      result = {"result": "success", "msg": "OK"}
-      if socket:
-        socket.send(json.dumps(result))
-      else:
-        logging.debug(json.dumps(result))
-      found = 1
-      clearstrip()
-  if found != 1:
-    result = {"result": "error", "msg": "Show Not Available"}
-    if socket:
-      socket.send(json.dumps(result))
-    else:
-      logging.debug(json.dumps(result))
+  #Exit current thread
+  if animthread:
+    animthread.running = False
+    animthread.join()
+  animthread = runshow(anim,showname,argtup)
+  if animthread:
+    result = {"result": "success", "msg": "OK"}
+  else:
+    result = {"result": "error", "msg": "Unable to star show " + showname}
+  if socket:
+    socket.send(json.dumps(result))
+  else:
+    logging.debug(json.dumps(result))
 
 def handleRequest():
   try:
@@ -112,7 +95,7 @@ def handleRequest():
     if req["action"] == "getshows":
       listShows(sock)
     elif req["action"] == "setshow":
-      setShow(sock,req["showname"])
+      setShow(sock,req["showname"],req["showargs"])
     elif req["action"] == "getcurrentshow":
       getCurrentShow(sock)
     elif req["action"] == "getcolornames":
@@ -123,11 +106,11 @@ def handleRequest():
     pass
 
 def main():
-  global currentshow
-  loadshows()
+  global animthread
+  animthread = runshow(anim,"Current")
   while True:
-    globals()[currentshow["function"]]()
     handleRequest()
+    time.sleep(1)
 
 if __name__ == '__main__':
   #opt_parse()
