@@ -22,12 +22,14 @@ inifile = basedir + '/etc/lightshow.json'
 pidfile = basedir + '/run/lightshow.pid'
 logfile = basedir + '/log/lightshow.log'
 loglevel = logging.INFO
+loglevel = logging.DEBUG
 
 #Initialize anim object
 anim = Animate(inifile)
 animthread = None
 
 def signal_handler(signal, frame):
+  global pidfile
   logging.info("Shutting Down")
   if animthread:
     animthread.running = False
@@ -67,8 +69,8 @@ def getColorNames(socket):
   colorarray = anim.getcolornames()
   try:
     socket.send(json.dumps(colorarray))
-  except:
-    logging.error("Error sending color array to socket")
+  except e:
+    logging.error("Error sending color array to socket: " + e)
 
 def setShow(socket,showname,argtup):
   global animthread
@@ -82,17 +84,17 @@ def setShow(socket,showname,argtup):
     result = {"result": "success", "msg": "OK"}
   else:
     result = {"result": "error", "msg": "Unable to star show " + showname}
-  if socket:
+  try:
     socket.send(json.dumps(result))
-  else:
-    logging.debug(json.dumps(result))
+  except e:
+    logging.error("Error sending show result to socket: " + e)
 
 def getShows(socket):
   showarray = anim.getshows()
   try:
     socket.send(json.dumps(showarray))
-  except:
-    logging.error("Error sending show array to socket")
+  except e:
+    logging.error("Error sending show array to socket: " + e)
   
 def getShow(socket,sname):
   show = anim.getshow(sname)
@@ -100,22 +102,29 @@ def getShow(socket,sname):
     show = {"error":"Show not found"}
   try:
     socket.send(json.dumps(show))
-  except:
-    logging.error("Error sending show object to socket")
+  except e:
+    logging.error("Error sending show object to socket: " + e)
   
 def getCurrentShow(socket):
   show = anim.getcurrentshow()
   try:
     socket.send(json.dumps(show))
-  except:
-    logging.error("Error sending show to socket")
+  except e:
+    logging.error("Error sending show to socket: " + e)
+
+def sendError(msg):
+  respdata = {"response":"Error","msg": msg}
+  try:
+    sock.send(json.dumps(respdata))
+  except zmq.ZMQError as e:
+    logging.error("ZMQError " + str(e.errno) + " in sendError")
+  except Exception as e:
+    logging.error("Error sending response to socket: " + e)
 
 def handleRequest():
   try:
-    message = sock.recv(flags=zmq.NOBLOCK)
-    logging.debug("Message received:", message)
-    req = json.loads(message)
-    logging.info("Received: " + json.dumps(req))
+    req = sock.recv_json(flags=zmq.NOBLOCK)
+    logging.debug("Received: " + json.dumps(req))
     if req["action"] == "getshows":
       getShows(sock)
     if req["action"] == "getshow":
@@ -127,8 +136,10 @@ def handleRequest():
     elif req["action"] == "getcolornames":
       getColorNames(sock)
     else:
-      sock.send('{"response":"Unknown Action"}')
-  except zmq.Again as e:
+      sendError("Unknown action " + req["action"])
+  except TypeError as e:
+    sendError("TypeError")
+  except zmq.Again:
     pass
 
 def main():

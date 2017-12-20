@@ -2,36 +2,48 @@
 import simplejson as json
 import lsclient
 from argparse import ArgumentParser
+import time
 
 parser = ArgumentParser(description='Lightshow client')
 parser.add_argument('--off', action='store_true', help='Shut lights all off')
 parser.add_argument('--status', action='store_true', help='Identify current show')
 parser.add_argument('--shows', action='store_true', help='Identify available shows')
 parser.add_argument('--setshow', nargs='?', help='change shows (Will prompt for args)')
+parser.add_argument('--colortest', action='store_true', help='cycle through available colors')
+parser.add_argument('--debug', nargs='?', help='change shows (Will prompt for args)')
 args = parser.parse_args()
+
+debug = 0
+if args.debug:
+  debug = args.debug
 
 def checkResult(result):
   if result['result'] != "success":
     print("ERROR: " + json.dumps(result))
 
 if args.status:
-  result = lsclient.status()
-  result = json.loads(result)
-  checkResult(result)
+  result = json.loads(lsclient.status())
+  if debug > 0:
+    print ("Received: " + json.dumps(result))
+  print "Status      : Healthy"
+  print "Current Show: " + result['name']
+   
 elif args.off:
-  result = lsclient.setshow("Solid",('off',))
-  result = json.loads(result)
+  result = json.loads(lsclient.setshow("Solid",('off',)))
   checkResult(result)
 elif args.shows:
-  result = lsclient.getshows()
-  result = json.loads(result)
-  print "Available Shows:"
+  result = json.loads(lsclient.getshows())
+  print "Available Shows:" + json.dumps(result)
   for show in result:
     print " " + show['name']
+elif args.colortest:
+  colors = json.loads(lsclient.getcolornames())
+  for color in colors:
+    print color
+    result = json.loads(lsclient.setshow("Solid",(color,)))
+    time.sleep(1)
 elif args.setshow:
-  result = lsclient.getshow(args.setshow)
-  result = json.loads(result)
-  #print(json.dumps(result))
+  result = json.loads(lsclient.getshow(args.setshow))
   print "Enter parameters for " + args.setshow + ":"
   showargs = []
   #raw_input("Saving color, enter color name: ")
@@ -71,9 +83,3 @@ elif args.setshow:
 else:
   print "No action taken"
   
-
-#print "Setting show to Every Other Red Green"
-#result = lsclient.setshow("EveryX",(2,1000,['red','green']))
-#result = json.loads(result)
-#print "Result: " + json.dumps(result, indent=2) + "\n"
-

@@ -3,3 +3,7 @@
 *.log
 *.pid
 *.sock
+__pycache__
+runit
+clienttest
+test.py

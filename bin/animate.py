@@ -52,6 +52,10 @@ class Animate:
       self.cfg = json.load(configfile)
       configfile.close()
 
+    print("Available Shows:")
+    for show in self.cfg["Shows"]:
+      print "    " + show["name"]
+
     self.colornames = {}
     self.colornames = self.cfg['Colors']
 
@@ -66,6 +70,16 @@ class Animate:
                              )
     self.strip.begin()
     self.pxls = self.strip.numPixels()
+
+  def wheel(self,pos):
+    if pos < 85:
+      return Color(pos * 3, 255 - pos * 3, 0)
+    elif pos < 170:
+      pos -= 85
+      return Color(255 - pos * 3, 0, pos * 3)
+    else:
+      pos -= 170
+      return Color(0, pos * 3, 255 - pos * 3)
 
   def savecolor(self,name,colval):
     self.colornames[name] = int(colval)
@@ -90,7 +104,7 @@ class Animate:
     return sorted(carr)
     
   def getcolor(self, colorname):
-    return self.colornames[colorname]
+    return self.colornames[colorname.lower()]
     
   def getcurrentshow(self):
     return self.cfg['CurrentShow']
@@ -123,6 +137,8 @@ class Animate:
 
   @runanimation
   def SetPixel(self,p=0,cvar=0):
+    showinfo = {"name":"SetPixel","args":[{"name":"Pixel","type":"int","value":p},{"name":"Color","type":"string","value":cvar}]}
+    self.savecurrentshow(showinfo)
     if cvar in self.colornames:
       self.strip.setPixelColor(p,self.colornames[cvar])
     else:
@@ -222,4 +238,57 @@ class Animate:
           return
       c = colors.pop()
       colors.insert(0,c)
+
+  @runanimation
+  def TheaterChase(self,color, delay=50):
+    showinfo = {"name":"TheaterChase","args":[{"name":"Color","type":"string","value":color},{"name":"Delay","type":"int","value":delay}]}
+    self.savecurrentshow(showinfo)
+    self.thread = threading.currentThread()
+    while getattr(self.thread, "running", True):
+      for q in range(3):
+        for i in range(0, self.strip.numPixels(), 3):
+          self.strip.setPixelColor(i+q, color)
+        self.strip.show()
+        self.asleep(delay)
+        for i in range(0, self.strip.numPixels(), 3):
+          self.strip.setPixelColor(i+q, 0)
+
+  @runanimation
+  def Rainbow(self,delay=5):
+    showinfo = {"name":"Rainbow","args":[{"name":"Delay","type":"int","value":delay}]}
+    self.savecurrentshow(showinfo)
+    self.thread = threading.currentThread()
+    while getattr(self.thread, "running", True):
+      for j in range(256):
+        for i in range(self.strip.numPixels()):
+          self.strip.setPixelColor(i, self.wheel((i+j) & 255))
+        self.strip.show()
+        self.asleep(delay)
+
+  @runanimation
+  def RainbowCycle(self,delay=20):
+    showinfo = {"name":"RainbowCycle","args":[{"name":"Delay","type":"int","value":delay}]}
+    self.savecurrentshow(showinfo)
+    self.thread = threading.currentThread()
+    while getattr(self.thread, "running", True):
+      for j in range(256):
+        for i in range(self.strip.numPixels()):
+          self.strip.setPixelColor(i, self.wheel((int(i * 256 / self.strip.numPixels()) + j) & 255))
+        self.strip.show()
+        self.asleep(delay)
+
+  @runanimation
+  def TheaterChaseRainbow(self,delay=5):
+    showinfo = {"name":"TheaterChaseRainbow","args":[{"name":"Delay","type":"int","value":delay}]}
+    self.savecurrentshow(showinfo)
+    self.thread = threading.currentThread()
+    while getattr(self.thread, "running", True):
+      for j in range(256):
+        for q in range(3):
+          for i in range(0, self.strip.numPixels(), 3):
+            self.strip.setPixelColor(i+q, self.wheel((i+j) % 255))
+          self.strip.show()
+          self.asleep(delay)
+          for i in range(0, self.strip.numPixels(), 3):
+            self.strip.setPixelColor(i+q, 0)
 
