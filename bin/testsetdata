@@ -1,0 +1,5 @@
+./sol -s data --data '{"dur":3600,"show":"CustomColorChase","args":{"speed":0.1,"size":10,"spacing":3,"colors":["RED","PINK","GREEN","AMBER"]}}'
+
+./sol -s data --data '{"dur":3600,"show":"Blink","args":{"speed":1,"color":"SOFT_WHITE"}}'
+
+'{"action": "setshows", "data":{"dur":3600,"show":"Blink","args":{"speed":1,"color":"SOFT_WHITE"}}}'

@@ -1,0 +1,36 @@
+sudo apt-get install python3-venv
+sudo mkdir /opt/lightshow
+sudo chown sean:sean /opt/lightshow
+cd /opt/lightshow
+python3 -m venv venv
+venv/bin/python -m pip install -U pip
+venv/bin/python -m pip install adafruit-circuitpython-neopixel adafruit-circuitpython-led-animation bottle "cherrypy<9.0"
+
+edit /boot/config.txt, change dtparam=audio=on to off
+save
+reboot
+
+
+Wiring with 5v Power and 24HCT245N level shifter
+
+RPI:
+  - Pin6 (GND) to common ground
+  - Pin 12 (GPIO 18) to pin 2 (A0) of level shifter
+
+Power Supply:
+  - Ground to common ground rail
+  - Power to common power rail
+
+Lights:
+  - GND to ground rail
+  - Plus to Power Rail
+  - Data to pin 18 (B0) of level shifter
+
+24HCT245N:
+  - Pin 1 to Ground Rail (DIR Low) (A -> B comms)
+  - Pin 2 (A0) to data line from Rpi
+  - Pin 10 to GND Rail
+  - Pin 18 (B0) to LED data in
+  - Pin 19 (OE) to Ground (OE Low = "on", OE High = "Off")
+  - Pin 20 to Power Rail
+

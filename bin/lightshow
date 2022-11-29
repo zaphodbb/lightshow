@@ -1,155 +1,411 @@
-#!/usr/bin/python
-################################################################################
-# Main driver for exterior lights.  Uses 0MQ for communication from web server
-# in the /opt/lightshow/lighthouse django web app.
-#
-# This runs a thread that is the current show while the master listens for zero
-# MQ requests to provide data and change the shows.
-################################################################################
-from animate import Animate, runshow
-import time
-import signal
-import simplejson as json
+#!/opt/lightshow/venv/bin/python
 import sys
-import threading
-import argparse
-import zmq
-import logging
+sys.dont_write_bytecode = True
 import os
+import logging
+import json
+from time import sleep, monotonic_ns
+from multiprocessing import Process, Queue
+import configparser
+import argparse
+import board
+import neopixel
+import configparser
+import inspect
+import socket
+from rpi_ws281x import Color
+from adafruit_led_animation.animation.blink import Blink
+from adafruit_led_animation.animation.sparklepulse import SparklePulse
+from adafruit_led_animation.animation.comet import Comet
+from adafruit_led_animation.animation.chase import Chase
+from adafruit_led_animation.animation.pulse import Pulse
+from adafruit_led_animation.animation.sparkle import Sparkle
+from adafruit_led_animation.animation.rainbowchase import RainbowChase
+from adafruit_led_animation.animation.rainbowsparkle import RainbowSparkle
+from adafruit_led_animation.animation.rainbowcomet import RainbowComet
+from adafruit_led_animation.animation.solid import Solid
+from adafruit_led_animation.animation.colorcycle import ColorCycle
+from adafruit_led_animation.animation.rainbow import Rainbow
+from adafruit_led_animation.animation.customcolorchase import CustomColorChase
+from adafruit_led_animation.sequence import AnimationSequence
+from adafruit_led_animation.color import RED, YELLOW, ORANGE, GREEN, TEAL, CYAN, BLUE, PURPLE, MAGENTA, WHITE, BLACK, GOLD, PINK, AQUA, JADE, AMBER, OLD_LACE as SOFT_WHITE, RAINBOW
 
-basedir = '/opt/lightshow'
-inifile = basedir + '/etc/lightshow.json'
-pidfile = basedir + '/run/lightshow.pid'
-logfile = basedir + '/log/lightshow.log'
-loglevel = logging.INFO
-loglevel = logging.DEBUG
+NANOS_PER_MS  = 1000000
+MS_PER_SECOND = 1000
 
-#Initialize anim object
-anim = Animate(inifile)
-animthread = None
 
-def signal_handler(signal, frame):
-  global pidfile
-  logging.info("Shutting Down")
-  if animthread:
-    animthread.running = False
-    animthread.join()
-  runshow(anim,"Solid")
-  print "Exiting"
-  try:
-    os.remove(pidfile)
-  except OSError:
-    pass
-  sock.close()
-  sys.exit(0)
+def monotonic_ms():
+    return monotonic_ns() // NANOS_PER_MS
 
-signal.signal(signal.SIGINT, signal_handler)
+def client(config,message):
+    HOST = "127.0.0.1"
+    PORT = 8080
+    msg = json.dumps(message)
+    logging.debug("Client sending {}".format(msg))
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.connect((config["client"]["host"], config["client"]["port"]))
+        s.sendall(msg.encode())
+        data = s.recv(1024)
+        logging.debug("Client received {}".format(data.decode()))
+        s.shutdown(socket.SHUT_RDWR)
+        s.close()
+    return(data.decode())
 
-##### Set up logging
-logging.basicConfig(filename=logfile,level=loglevel,format='%(asctime)s %(levelname)-8s %(message)s')
+def listener(config,q):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind((config["listener"]["host"], config["listener"]["port"]))
+    s.listen()
+    try:
+        while True:
+            logging.info("LISTENER: Listening on port {}".format(config["listener"]["port"]))
+            conn, addr = s.accept()
+            while True:
+                data = conn.recv(1024)
+                if not data:
+                    break
+                logging.info("LISTENER: Received {}".format(data.decode()))
+                q.put(data.decode())
+                rsp = q.get()
+                logging.debug("LISTENER: Returning {}".format(rsp))
+                conn.sendall(rsp.encode())
+                logging.debug("LISTENER: Response sent, closing connection")
+                conn.close()
+                break
+    except KeyboardInterrupt:
+        logging.info("LISTENER: KeyboardInterrupt, exiting")
 
-##### Create pid file
-pid = os.getpid()
-with open(pidfile, 'w') as pidfile:
-  pidfile.write(str(pid))
-  pidfile.close()
+def show_runner(shows,pixels):
+    try:
+        while True:
+            for show in shows:
+                showdur_ms = int(show["dur"] * MS_PER_SECOND)
+                clear(pixels)
+                logging.debug("Animating {}".format(show["show"].__class__))
+                now = monotonic_ms()
+                nextshow = now + showdur_ms
+                while True:
+                    now = monotonic_ms()
+                    if now >= nextshow:
+                        logging.debug("Moving on")
+                        break
+                    show["show"].animate()
+    finally:
+        logging.debug("RUNNER: Exiting")
 
-##### Set up zeromq queue
-context = zmq.Context()
-sock = context.socket(zmq.REP)
-sock.bind("tcp://127.0.0.1:5678")
+def get_config(cfgfile):
+    cfg = configparser.ConfigParser()
+    cfg.read(cfgfile, encoding="utf8")
+    pinname = "D{}".format(cfg['lightstrip']['pin'])
+    pinclass = getattr(board,pinname)
+    order = getattr(neopixel,cfg['lightstrip']['order'])
+    config = {"count": int(cfg['lightstrip']['lights']),
+              "pin": pinclass,
+              "order": order,
+              "bright": float(cfg['lightstrip']['brightness']),
+              "auto": cfg['lightstrip']['autowrite'],
+              "client": {"host": cfg['client']['host'],
+                         "port": int(cfg['client']['port'])
+                        },
+              "listener": {"host": cfg['listener']['host'],
+                           "port": int(cfg['listener']['port'])
+                          },
+             }
+    return config
 
-#parser = argparse.ArgumentParser(description='zeromq server/client')
-#parser.add_argument('--bar')
-#args = parser.parse_args()
+def clear(pixels):
+    # Clear the strip
+    logging.debug("Clear")
+    pixels.fill((0, 0, 0))
+    pixels.show()
 
-logging.info("Lightshow started.")
+def colors_from_names(colors):
+    if isinstance(colors,str):
+        return eval(colors)
+    elif isinstance(colors,list):
+        rval = []
+        for val in colors:
+            logging.debug("val = {}".format(val))
+            if isinstance(val,str):
+                rval.append(eval(val))
+            else:
+                rval.append(val)
+        return rval
 
-def getColorNames(socket):
-  colorarray = anim.getcolornames()
-  try:
-    socket.send(json.dumps(colorarray))
-  except e:
-    logging.error("Error sending color array to socket: " + e)
+def setshows(pixels,data):
 
-def setShow(socket,showname,argtup):
-  global animthread
-  logging.info("Setting show to " + showname)
-  #Exit current thread
-  if animthread:
-    animthread.running = False
-    animthread.join()
-  animthread = runshow(anim,showname,argtup)
-  if animthread:
-    result = {"result": "success", "msg": "OK"}
-  else:
-    result = {"result": "error", "msg": "Unable to star show " + showname}
-  try:
-    socket.send(json.dumps(result))
-  except e:
-    logging.error("Error sending show result to socket: " + e)
+    if isinstance(data,dict):
+        if "preset" in data:
+            if data["preset"] == "usa":
+                logging.debug("Setting to usa")
+                from presets import USA
+                data = [USA]
+            elif data["preset"] == "halloween":
+                logging.debug("Setting to halloween")
+                from presets import HALLOWEEN
+                data = [HALLOWEEN]
+            elif data["preset"] == "christmas":
+                logging.debug("Setting to christmas")
+                from presets import CHRISTMAS
+                data = [CHRISTMAS]
+            elif data["preset"] == "stpatricksday":
+                logging.debug("Setting to stpatricksday")
+                from presets import STPATRICKSDAY
+                data = [STPATRICKSDAY]
+            elif data["preset"] == "rainbow":
+                logging.debug("Setting to rainbow")
+                from presets import RAINBOW
+                data = [RAINBOW]
+            elif data["preset"] == "rainbowcomet":
+                logging.debug("Setting to rainbowcomet")
+                from presets import RAINBOWCOMET
+                data = [RAINBOWCOMET]
+            elif data["preset"] == "rainbowchase":
+                logging.debug("Setting to rainbowchase")
+                from presets import RAINBOWCHASE
+                data = [RAINBOWCHASE]
+            elif data["preset"] == "demo":
+                logging.debug("Setting to demo")
+                shows = demo(20,pixels)
+                return shows
+        else:
+            data = [data]
+    shows = []
+    for sd in data:
+        sargs = sd['args']
+        # Convert color strings to color objects
+        for arg in sargs:
+            if arg == "color" or arg == "colors":
+                sargs[arg] = colors_from_names(sargs[arg])
+                    
+        showstr = "{}(pixels".format(sd['show'])
+        for arg in sargs:
+            showstr = "{},{}={}".format(showstr,arg,sargs[arg])
+        showstr = "{})".format(showstr)
+        logging.debug("Show string = {}".format(showstr))
+        show = eval(showstr)
+        shows.append({"dur": sd['dur'],"show": show})
+    return shows
 
-def getShows(socket):
-  showarray = anim.getshows()
-  try:
-    socket.send(json.dumps(showarray))
-  except e:
-    logging.error("Error sending show array to socket: " + e)
-  
-def getShow(socket,sname):
-  show = anim.getshow(sname)
-  if show == None:
-    show = {"error":"Show not found"}
-  try:
-    socket.send(json.dumps(show))
-  except e:
-    logging.error("Error sending show object to socket: " + e)
-  
-def getCurrentShow(socket):
-  show = anim.getcurrentshow()
-  try:
-    socket.send(json.dumps(show))
-  except e:
-    logging.error("Error sending show to socket: " + e)
+def demo(showdur,pixels):
+    customcolorchase = CustomColorChase(pixels, speed=0.01, size=5, spacing=5, colors=[RED, WHITE, BLUE])
+    blink = Blink(pixels, speed=0.2, color=RED)
+    colorcycle = ColorCycle(pixels, speed=0.01, colors=RAINBOW)
+    comet = Comet(pixels, speed=0.001, color=PURPLE, tail_length=100, bounce=True, skip=5)
+    chase = Chase(pixels, speed=0.01, size=3, spacing=6, color=WHITE)
+    pulse = Pulse(pixels, speed=0.001, period=10, color=GREEN)
+    sparkle = Sparkle(pixels, speed=0.01, color=PURPLE, num_sparkles=10)
+    solid = Solid(pixels, color=MAGENTA)
+    rainbow = Rainbow(pixels, speed=0.01, period=2)
+    sparkle_pulse = SparklePulse(pixels, speed=0.001, period=5, color=JADE)
+    rainbow_comet = RainbowComet(pixels, speed=0.001, tail_length=30, bounce=True,skip=10)
+    rainbow_chase = RainbowChase(pixels, speed=0.01, size=5, spacing=5, step=8)
+    rainbow_sparkle = RainbowSparkle(pixels, speed=0.001, num_sparkles=50)
+    shows = [{"dur": showdur, "show": customcolorchase},
+             {"dur": showdur, "show": blink},
+             {"dur": showdur, "show": colorcycle},
+             {"dur": showdur, "show": comet},
+             {"dur": showdur, "show": chase},
+             {"dur": showdur, "show": pulse},
+             {"dur": showdur, "show": sparkle},
+             {"dur": showdur, "show": rainbow},
+             {"dur": showdur, "show": sparkle_pulse},
+             {"dur": showdur, "show": rainbow_comet},
+             {"dur": showdur, "show": rainbow_chase},
+             {"dur": showdur, "show": rainbow_sparkle},
+             {"dur": showdur, "show": solid}
+            ]
+    return shows
 
-def sendError(msg):
-  respdata = {"response":"Error","msg": msg}
-  try:
-    sock.send(json.dumps(respdata))
-  except zmq.ZMQError as e:
-    logging.error("ZMQError " + str(e.errno) + " in sendError")
-  except Exception as e:
-    logging.error("Error sending response to socket: " + e)
+def get_show_info():
+    showinfo = []
+    shows = [Blink,
+             ColorCycle,
+             Comet,
+             Chase,
+             Pulse,
+             Sparkle,
+             Solid,
+             Rainbow,
+             SparklePulse,
+             RainbowComet,
+             RainbowChase,
+             RainbowSparkle,
+            ]
+    for show in shows:
+        info = {'name': 'TBD','args': []}
+        sig = inspect.signature(show)
+        info['name'] = show.__name__
+        for element in sig.parameters.values():
+            en = element.name
+            info['args'].append(en)
+        showinfo.append(info)
 
-def handleRequest():
-  try:
-    req = sock.recv_json(flags=zmq.NOBLOCK)
-    logging.debug("Received: " + json.dumps(req))
-    if req["action"] == "getshows":
-      getShows(sock)
-    if req["action"] == "getshow":
-      getShow(sock,req["showname"])
-    elif req["action"] == "setshow":
-      setShow(sock,req["showname"],req["showargs"])
-    elif req["action"] == "getcurrentshow":
-      getCurrentShow(sock)
-    elif req["action"] == "getcolornames":
-      getColorNames(sock)
+    return showinfo
+
+def main(args):
+    logging.debug("Sol starting - shine on!")
+    config = get_config(args.config)
+    pixels = neopixel.NeoPixel(config['pin'],
+                              config['count'],
+                              brightness=config['bright'],
+                              auto_write=config['auto'],
+                              pixel_order=config['order']
+                             )
+
+    default = Rainbow(pixels, speed=0.001, period=2)
+    shows = [{"dur": args.time, "show": default}]
+
+    if args.demo:
+        shows = demo(args.time,pixels)
+
+    showproc = Process(target=show_runner, args=(shows,pixels,))
+    #showproc.start()
+    #logging.info("Show started with pid {}".format(showproc.pid))
+    logging.info("Starting without a default show")
+
+    q = Queue()
+
+    listenproc = Process(target=listener, args=(config, q,))
+    listenproc.start()
+    logging.info("Listener started with pid {}".format(listenproc.pid))
+
+    try:
+        while True:
+            logging.debug("Entering loop, waiting on q")
+            req = q.get()
+            logging.debug("Got message from q")
+            request = json.loads(req)
+            a = request['action']
+            if a == "exit":
+                logging.debug("Action == exit")
+                q.put(json.dumps({"action": "exit","result": True}))
+                logging.debug("Exiting Program")
+                break
+            elif a == "get_show_info":
+                logging.debug("Action = get_show_info")
+                q.put(json.dumps({"action": "get_show_info", "result": True,"data": get_show_info()}))
+            elif a == "stop":
+                logging.debug("Action == off")
+                logging.debug("terminating showproc {}".format(showproc.pid))
+                if showproc.is_alive():
+                    showproc.terminate()
+                clear(pixels)
+                reply = {"action": "off","result": True}
+                logging.debug("Sending reply: {}".format(json.dumps(reply)))
+                q.put(json.dumps(reply))
+            elif a == "start":
+                logging.debug("Action == start")
+                showproc = Process(target=show_runner, args=(shows,pixels,))
+                showproc.daemon = True
+                showproc.start()
+                logging.debug("Show started with pid {}".format(showproc.pid))
+                q.put(json.dumps({"action": "start","result": True}))
+            elif a == "setcolor":
+                cdata = {'dur': 3600, 'show': 'Solid', "args": {'color': request['color']}}
+                logging.debug("Action == setcolor")
+                shows = setshows(pixels,cdata)
+                if showproc.isalive():
+                    # Stop existing process
+                    showproc.terminate()
+                #Define new show process
+                showproc = Process(target=show_runner, args=(shows,pixels,))
+                showproc.daemon = True
+                showproc.start()
+                logging.debug("Show started with pid {}".format(showproc.pid))
+                q.put(json.dumps({"action": "setshows","result": True}))
+            elif a == "setshows":
+                logging.info("Action == setshows")
+                shows = setshows(pixels,request['data'])
+                logging.info("Got show")
+                if showproc.is_alive():
+                    logging.info("Terminating existing show")
+                    # Stop existing process
+                    showproc.terminate()
+                #Define new show process
+                logging.info("Defining Process")
+                showproc = Process(target=show_runner, args=(shows,pixels,))
+                logging.info("Got Process")
+                showproc.daemon = True
+                logging.info("Starting Process")
+                showproc.start()
+                logging.info("Started Process")
+                logging.info("Show started with pid {}".format(showproc.pid))
+                q.put(json.dumps({"action": "setshows","result": True}))
+            else:
+                logging.info("Invalid action {}".format(a))
+                q.put(json.dumps({"action": a,"result": False}))
+            req = None
+            request = None
+            a = None
+            logging.debug("LOOPING")
+    except KeyboardInterrupt:
+        pass
+    finally:
+        logging.debug("FINALLY")
+        clear(pixels)
+        if showproc is not None:
+            logging.debug("Terminating showproc {}".format(showproc.pid))
+            showproc.terminate()
+        if listenproc is not None:
+            logging.debug("Terminating listenproc {}".format(listenproc.pid))
+            listenproc.terminate()
+        logging.info("Exiting gracefully")
+
+def test(args):
+    logging.debug("Starting test function")
+    showinfo = get_show_info(args)
+    print(json.dumps(showinfo,indent=2))
+    logging.debug("Exiting test function")
+
+if __name__ == "__main__":
+    actions = ["stop", "off", "start", "on", "shutdown", "exit", "get_show_info", "preset", "data", "setcolor"]
+    presets = ["usa", "halloween", "christmas", "stpatricksday"]
+    defcfg = "/opt/lightshow/etc/config.ini"
+    parser = argparse.ArgumentParser(description="WS281X lightshow server")
+    parser.add_argument('-d','--debug',action='store_true',help='enable debugging')
+    parser.add_argument('-c','--config',nargs='?',default=defcfg,help='config file')
+    parser.add_argument('--demo',action='store_true',help='Run demo')
+    parser.add_argument('--off',action='store_true',help='Turn lights all off')
+    parser.add_argument('-t','--time',nargs='?',default=86400,help='Number of seconds to run each show (1 day)')
+    parser.add_argument('-s','--set',nargs='?',choices=actions,help="Sol Client used for controlling running process")
+    parser.add_argument('-p','--preset',nargs='?',choices=presets,help="preset to use")
+    parser.add_argument('--data',nargs='?',help="JSON string of show configurations")
+    parser.add_argument('--color',nargs='?',help="Color to set solid ('RED' or 'Color(255,0,0)')")
+    parser.add_argument('--test',action='store_true',help='Run test function')
+    parser.add_argument('--logfile',nargs='?',default="/opt/lightshow/log/lightshow.log",help='Log File')
+    args = parser.parse_args()
+
+    if args.debug or args.test:
+        logging.basicConfig(level=logging.DEBUG,filename=args.logfile)
     else:
-      sendError("Unknown action " + req["action"])
-  except TypeError as e:
-    sendError("TypeError")
-  except zmq.Again:
-    pass
+        logging.basicConfig(level=logging.INFO,filename=args.logfile)
 
-def main():
-  global animthread
-  animthread = runshow(anim,"Current")
-  while True:
-    handleRequest()
-    time.sleep(1)
+    if args.set:
+        config = get_config(args.config)
+        args.set = args.set.lower()
+        if args.set == "stop" or args.set == "off":
+            response = client(config,{"action":"stop"})
+        if args.set == "start" or args.set == "on":
+            response = client(config,{"action":"start"})
+        if args.set == "shutdown" or args.set == "exit":
+            response = client(config,{"action":"exit"})
+        elif args.set == "get_show_info":
+            response = client(config,{"action":"get_show_info"})
+        elif args.set == "preset":
+            response = client(config,{"action": "setshows", "data": {"preset": args.preset}})
+        elif args.set == "setcolor":
+            response = client(config,{"action": "setcolor", "color": args.color})
+        elif args.set == "data":
+            data = json.loads(args.data)
+            response = client(config,{"action": "setshows", "data": data})
+        print("Result: {}".format(json.dumps(json.loads(response),indent=2)))
+        sys.exit(0)
 
-if __name__ == '__main__':
-  #opt_parse()
-  main()
+    if args.demo:
+        args.time = 10
+
+    if args.test:
+        test(args)
+    else:
+        main(args)
 
