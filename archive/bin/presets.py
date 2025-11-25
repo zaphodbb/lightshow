@@ -34,17 +34,6 @@ USA = {"dur": 3600,
                }
       }
 
-DERRY = {"dur": 3600,
-       "show": "CustomColorChaseSparkle",
-       "args": {"speed": 0.01,
-                "size": 5,
-                "spacing": 5,
-                "colors": ["BLUE",
-                           "YELLOW"
-                          ]
-               }
-      }
-
 HALLOWEEN = {"dur": 3600,
              "show": "CustomColorChase",
              "args": {"speed": 0.01,
@@ -56,75 +45,7 @@ HALLOWEEN = {"dur": 3600,
                      }
             }
 
-XMAS = {"dur": 3600,
-        "show": "CustomColorChase",
-        "args": {"speed": 60,
-                 "colors": ["RED",
-                            "GREEN"
-                           ],
-                 "size": 5,
-                 "spacing": 3
-                }
-       }
-
-XMAS2 = {"dur": 3600,
-         "show": "CustomColorChase",
-         "args": {"speed": 60,
-                  "colors": ["RED",
-                             "GREEN"
-                            ],
-                  "size": 1,
-                  "spacing": 2
-                 }
-        }
-
-XMASRAINBOW = {"dur": 3600,
-               "show": "XmasRainbow",
-               "args": {"speed": 0.03,
-                        "period": 2
-                       }
-              }
-
-XMAS2FAST = {"dur": 3600,
-             "show": "CustomColorChase",
-             "args": {"speed": 1,
-                      "colors": ["RED",
-                                 "GREEN",
-                                 "RED",
-                                 "GREEN"
-                                ],
-                      "size": 1,
-                      "spacing": 2
-                     }
-            }
-
-XMAS2FASTER = {"dur": 3600,
-               "show": "CustomColorChase",
-               "args": {"speed": 0.001,
-                        "colors": ["RED",
-                                   "GREEN"
-                                  ],
-                        "size": 1,
-                        "spacing": 2
-                       }
-              }
-
-NEWYRS = {"dur": 3600,
-         "show": "CustomColorChase",
-         "args": {"speed": 1,
-                  "colors": ["BLUE",
-                             "WHITE",
-                             "BLUE",
-                             "WHITE",
-                             "BLUE",
-                             "WHITE"
-                            ],
-                  "size": 1,
-                  "spacing": 2
-                 }
-        }
-
-XMASFADE  = {"dur": 3600,
+CHRISTMAS = {"dur": 3600,
              "show": "ColorCycle",
              "args": {"speed": 0.1,
                       "colors": [(255,0,0),

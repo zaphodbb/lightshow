@@ -14,26 +14,19 @@ import configparser
 import inspect
 import socket
 from rpi_ws281x import Color
-# from customcolorchasesparkle import CustomColorChaseSparkle
 from adafruit_led_animation.animation.blink import Blink
-from adafruit_led_animation.animation.chase import Chase
-from adafruit_led_animation.animation.colorcycle import ColorCycle
-from adafruit_led_animation.animation.comet import Comet
-from adafruit_led_animation.animation.customcolorchase import CustomColorChase
-#from adafruit_led_animation.animation.grid_rain import GridRain
-#from adafruit_led_animation.animation.multicolor_comet import MulticolorComet
-#from adafruit_led_animation.animation.pacman import Pacman
-from adafruit_led_animation.animation.pulse import Pulse
-from adafruit_led_animation.animation.rainbow import Rainbow
-from adafruit_led_animation.animation.rainbowchase import RainbowChase
-from adafruit_led_animation.animation.rainbowcomet import RainbowComet
-from adafruit_led_animation.animation.rainbowsparkle import RainbowSparkle
-from adafruit_led_animation.animation.solid import Solid
-from adafruit_led_animation.animation.sparkle import Sparkle
 from adafruit_led_animation.animation.sparklepulse import SparklePulse
-#from adafruit_led_animation.animation.volume import Volume
-from adafruit_led_animation.animation.xmasrainbow import XmasRainbow
-
+from adafruit_led_animation.animation.comet import Comet
+from adafruit_led_animation.animation.chase import Chase
+from adafruit_led_animation.animation.pulse import Pulse
+from adafruit_led_animation.animation.sparkle import Sparkle
+from adafruit_led_animation.animation.rainbowchase import RainbowChase
+from adafruit_led_animation.animation.rainbowsparkle import RainbowSparkle
+from adafruit_led_animation.animation.rainbowcomet import RainbowComet
+from adafruit_led_animation.animation.solid import Solid
+from adafruit_led_animation.animation.colorcycle import ColorCycle
+from adafruit_led_animation.animation.rainbow import Rainbow
+from adafruit_led_animation.animation.customcolorchase import CustomColorChase
 from adafruit_led_animation.sequence import AnimationSequence
 from adafruit_led_animation.color import RED, YELLOW, ORANGE, GREEN, TEAL, CYAN, BLUE, PURPLE, MAGENTA, WHITE, BLACK, GOLD, PINK, AQUA, JADE, AMBER, OLD_LACE as SOFT_WHITE, RAINBOW
 
@@ -139,48 +132,21 @@ def colors_from_names(colors):
         return rval
 
 def setshows(pixels,data):
+
     if isinstance(data,dict):
         if "preset" in data:
             if data["preset"] == "usa":
                 logging.debug("Setting to usa")
                 from presets import USA
                 data = [USA]
-            elif data["preset"] == "derry":
-                logging.debug("Setting to derry")
-                from presets import DERRY
-                data = [DERRY]
             elif data["preset"] == "halloween":
                 logging.debug("Setting to halloween")
                 from presets import HALLOWEEN
                 data = [HALLOWEEN]
-            elif data["preset"] == "xmas":
-                logging.debug("Setting to xmas")
-                from presets import XMAS
-                data = [XMAS]
-            elif data["preset"] == "xmas2":
-                logging.debug("Setting to xmas2")
-                from presets import XMAS2
-                data = [XMAS2]
-            elif data["preset"] == "xmas2fast":
-                logging.debug("Setting to xmas2fast")
-                from presets import XMAS2FAST
-                data = [XMAS2FAST]
-            elif data["preset"] == "xmas2faster":
-                logging.debug("Setting to xmas2faster")
-                from presets import XMAS2FASTER
-                data = [XMAS2FASTER]
-            elif data["preset"] == "newyears":
-                logging.debug("Setting to newyears")
-                from presets import NEWYRS
-                data = [NEWYRS]
-            elif data["preset"] == "xmasfade":
-                logging.debug("Setting to xmasfade")
-                from presets import XMASFADE
-                data = [XMASFADE]
-            elif data["preset"] == "xmasrainbow":
-                logging.debug("Setting to xmasrainbow")
-                from presets import XMASRAINBOW
-                data = [XMASRAINBOW]
+            elif data["preset"] == "christmas":
+                logging.debug("Setting to christmas")
+                from presets import CHRISTMAS
+                data = [CHRISTMAS]
             elif data["preset"] == "stpatricksday":
                 logging.debug("Setting to stpatricksday")
                 from presets import STPATRICKSDAY
@@ -311,7 +277,7 @@ def main(args):
             request = json.loads(req)
             a = request['action']
             if a == "exit":
-                logging.debug("Action = exit")
+                logging.debug("Action == exit")
                 q.put(json.dumps({"action": "exit","result": True}))
                 logging.debug("Exiting Program")
                 break
@@ -319,7 +285,7 @@ def main(args):
                 logging.debug("Action = get_show_info")
                 q.put(json.dumps({"action": "get_show_info", "result": True,"data": get_show_info()}))
             elif a == "stop":
-                logging.debug("Action = off")
+                logging.debug("Action == off")
                 logging.debug("terminating showproc {}".format(showproc.pid))
                 if showproc.is_alive():
                     showproc.terminate()
@@ -328,7 +294,7 @@ def main(args):
                 logging.debug("Sending reply: {}".format(json.dumps(reply)))
                 q.put(json.dumps(reply))
             elif a == "start":
-                logging.debug("Action = start")
+                logging.debug("Action == start")
                 showproc = Process(target=show_runner, args=(shows,pixels,))
                 showproc.daemon = True
                 showproc.start()
@@ -336,7 +302,7 @@ def main(args):
                 q.put(json.dumps({"action": "start","result": True}))
             elif a == "setcolor":
                 cdata = {'dur': 3600, 'show': 'Solid', "args": {'color': request['color']}}
-                logging.debug("Action = setcolor")
+                logging.debug("Action == setcolor")
                 shows = setshows(pixels,cdata)
                 if showproc.isalive():
                     # Stop existing process
@@ -348,7 +314,7 @@ def main(args):
                 logging.debug("Show started with pid {}".format(showproc.pid))
                 q.put(json.dumps({"action": "setshows","result": True}))
             elif a == "setshows":
-                logging.info("Action = setshows, calling setshows")
+                logging.info("Action == setshows")
                 shows = setshows(pixels,request['data'])
                 logging.info("Got show")
                 if showproc.is_alive():
@@ -393,7 +359,7 @@ def test(args):
 
 if __name__ == "__main__":
     actions = ["stop", "off", "start", "on", "shutdown", "exit", "get_show_info", "preset", "data", "setcolor"]
-    presets = ["usa", "halloween", "xmas", "xmasfade", "stpatricksday"]
+    presets = ["usa", "halloween", "christmas", "stpatricksday"]
     defcfg = "/opt/lightshow/etc/config.ini"
     parser = argparse.ArgumentParser(description="WS281X lightshow server")
     parser.add_argument('-d','--debug',action='store_true',help='enable debugging')
@@ -402,7 +368,7 @@ if __name__ == "__main__":
     parser.add_argument('--off',action='store_true',help='Turn lights all off')
     parser.add_argument('-t','--time',nargs='?',default=86400,help='Number of seconds to run each show (1 day)')
     parser.add_argument('-s','--set',nargs='?',choices=actions,help="Sol Client used for controlling running process")
-    parser.add_argument('-p','--preset',nargs='?',help="preset to use")
+    parser.add_argument('-p','--preset',nargs='?',choices=presets,help="preset to use")
     parser.add_argument('--data',nargs='?',help="JSON string of show configurations")
     parser.add_argument('--color',nargs='?',help="Color to set solid ('RED' or 'Color(255,0,0)')")
     parser.add_argument('--test',action='store_true',help='Run test function')
