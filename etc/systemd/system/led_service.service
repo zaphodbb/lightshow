@@ -1,0 +1,14 @@
+[Unit]
+Description=WS2813 LED Control Service
+After=network.target
+
+[Service]
+ExecStart=/opt/lightshow/venv/bin/python /opt/lightshow/bin/led_service
+WorkingDirectory=/opt/lightshow
+User=sean
+Group=sean
+Restart=always
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

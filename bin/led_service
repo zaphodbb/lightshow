@@ -1,0 +1,122 @@
+#!/opt/lightshow/venv/bin/python
+import sys
+import time
+import socket
+import threading
+import board
+import neopixel
+import json
+import logging
+from adafruit_led_animation.animation.blink import Blink
+from adafruit_led_animation.animation.chase import Chase
+from adafruit_led_animation.animation.colorcycle import ColorCycle
+from adafruit_led_animation.animation.comet import Comet
+from adafruit_led_animation.animation.customcolorchase import CustomColorChase
+from adafruit_led_animation.animation.grid_rain import Rain,RainbowRain,MatrixRain
+from adafruit_led_animation.animation.multicolor_comet import MulticolorComet
+from adafruit_led_animation.animation.pacman import Pacman
+from adafruit_led_animation.animation.pulse import Pulse
+from adafruit_led_animation.animation.rainbow import Rainbow
+from adafruit_led_animation.animation.rainbowchase import RainbowChase
+from adafruit_led_animation.animation.rainbowcomet import RainbowComet
+from adafruit_led_animation.animation.rainbowsparkle import RainbowSparkle
+from adafruit_led_animation.animation.solid import Solid
+from adafruit_led_animation.animation.sparkle import Sparkle
+from adafruit_led_animation.animation.sparklepulse import SparklePulse
+from adafruit_led_animation.animation.volume import Volume
+#from adafruit_led_animation.animation.xmasrainbow import XmasRainbow
+from adafruit_led_animation.sequence import AnimationSequence
+from adafruit_led_animation.color import RED, YELLOW, ORANGE, GREEN, TEAL, CYAN, BLUE, PURPLE, MAGENTA, WHITE, BLACK, GOLD, PINK, AQUA, JADE, AMBER, OLD_LACE as SOFT_WHITE, RAINBOW
+
+# Configuration for the WS2813 LEDs
+ORDER = "GRB"        # config.order
+LED_PIN = board.D18  # The GPIO pin connected to the LED strip
+NUM_LEDS = 900       # Number of LEDs in the strip (adjust as needed)
+LED_BRIGHTNESS = 0.5 # Brightness (0.0 to 1.0)
+PORT = 8080          # Port to listen on for commands
+
+loglevel = logging.DEBUG
+
+logging.basicConfig(level=loglevel)
+
+# Create the NeoPixel object
+pixels = neopixel.NeoPixel(LED_PIN, NUM_LEDS, brightness=LED_BRIGHTNESS, auto_write=False, pixel_order=ORDER)
+
+def clear_leds():
+    """Turn off all LEDs."""
+    pixels.fill((0, 0, 0))
+    pixels.show()
+
+def colors_from_names(colors):
+    if isinstance(colors,str):
+        return eval(colors)
+    elif isinstance(colors,list):
+        rval = []
+        for val in colors:
+            logging.debug("val = {}".format(val))
+            if isinstance(val,str):
+                rval.append(eval(val))
+            else:
+                rval.append(val)
+        return rval
+
+def handle_client_connection(conn,exit_event):
+    """Handle a client connection and process commands."""
+    with conn:
+        logging.info("Connected to client.")
+        while True:
+            data = conn.recv(1024)
+            if not data:
+                break
+
+            try:
+                command = json.loads(data.decode('utf-8'))
+                logging.info(f"Received command: {command}")
+
+                # Command = JSON with animation,color,times
+                animation = command.get("show")
+                sargs = command.get("args")
+
+                if animation == 'off':
+                    clear_leds()
+                elif animation == 'exit':
+                    clear_leds()
+                    logging.error("Received exit command, shutting down")
+                    exit_event.set()
+                else:
+                    # Convert color strings to RGB color objects
+                    for arg in sargs:
+                        if arg == "color" or arg == "colors":
+                            sargs[arg] = colors_from_names(sargs[arg])
+
+                    # Convert animation name and args to a function call
+                    showstr = f"{animation}(pixels"
+                    for arg in sargs:
+                        showstr = "{},{}={}".format(showstr,arg,sargs[arg])
+                    showstr = "{})".format(showstr)
+                    logging.info(f"Show string = {showstr}")
+                    show = eval(showstr)
+                    show.animate()
+
+            except Exception as e:
+                logging.error(f"Error processing command: {e}")
+                clear_leds()
+
+def main():
+    """Start the socket server to listen for client commands."""
+    exit_event = threading.Event()
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(('0.0.0.0', PORT))  # Listen on all available interfaces
+        s.listen(1)
+        logging.info(f"Listening for connections on port {PORT}...")
+        while True:
+            conn, addr = s.accept()
+            client_thread = threading.Thread(target=handle_client_connection, args=(conn,exit_event))
+            client_thread.start()
+            if exit_event.is_set():
+               sys.exit(1)
+               break
+
+if __name__ == "__main__":
+    main()
+
